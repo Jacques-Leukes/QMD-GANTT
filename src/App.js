@@ -83,7 +83,7 @@ export default function App() {
   });
   if (lastMonth !== -1) monthGroups.push({ month: lastMonth, startIdx, count: weeks.length - startIdx });
 
-  const WEEK_W = 22;
+  const WEEK_W = 40;
   const ROW_H = 44;
   const LABEL_W = 220;
 
