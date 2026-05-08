@@ -1,144 +1,151 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useMemo } from "react";
+
+const DAY_W = 24;
+const ROW_H = 44;
 
 const CATEGORIES = {
-  institutional: { label: "Institutional", bar: "#2d6be4", light: "#d6e4ff", text: "#1e3a5f" },
-  iqe: { label: "Quality Engagement", bar: "#e4572d", light: "#ffd6c8", text: "#5f1e0a" },
-  iqip: { label: "Quality Improvement", bar: "#2de48a", light: "#c8ffe3", text: "#0a5f2e" },
-  iqaa: { label: "Quality Assurance & Accountability", bar: "#e4c42d", light: "#fff8c8", text: "#5f4a0a" },
-  km: { label: "Knowledge Management", bar: "#9c2de4", light: "#ead6ff", text: "#3a1e5f" },
-  fe: { label: "Faculty Engagement", bar: "#2dc4e4", light: "#c8f4ff", text: "#0a3f5f" },
-  ipe: { label: "Institutional Policy Engagement", bar: "#e42d7a", light: "#ffd6eb", text: "#5f0a2e" },
-  qmdse: { label: "QMD Strategic Engagement", bar: "#e47a2d", light: "#ffe3c8", text: "#5f2e0a" },
-  iqc: { label: "Institutional Quality Culture", bar: "#2de4c4", light: "#c8fff4", text: "#0a5f4a" }
+  institutional: { label: "Institutional", color: "#2d6be4" },
+  iqe: { label: "Institutional Quality Engagement", color: "#e4572d" },
+  iqip: { label: "Institutional Quality Improvement", color: "#2de48a" },
+  iqaa: { label: "Institutional Quality Assurance & Accountability", color: "#e4c42d" },
+  km: { label: "Knowledge Management", color: "#9c2de4" },
+  fe: { label: "Faculty Engagement", color: "#2dc4e4" },
+  ipe: { label: "Institutional Policy Engagement", color: "#e42d7a" },
+  qmdse: { label: "QMD Strategic Engagement", color: "#e47a2d" },
+  iqc: { label: "Institutional Quality Culture", color: "#2de4c4" }
 };
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-const DAY_LABELS = ["Mon","Tue","Wed","Thu","Fri"];
 
-function getWorkdaysInYear(year) {
+const defaultData = [
+  { id: 1, name: "Annual Review", type: "institutional", start: "2026-02-02", end: "2026-02-27" },
+  { id: 2, name: "Engagement Project", type: "iqe", start: "2026-03-01", end: "2026-04-15" },
+  { id: 3, name: "DQIP Cycle", type: "iqip", start: "2026-03-10", end: "2026-04-30" },
+  { id: 4, name: "QA Audit", type: "iqaa", start: "2026-05-01", end: "2026-05-20" },
+  { id: 5, name: "Knowledge Session", type: "km", start: "2026-05-10", end: "2026-05-30" },
+  { id: 6, name: "Faculty Workshop", type: "fe", start: "2026-06-01", end: "2026-07-10" },
+  { id: 7, name: "Policy Engagement", type: "ipe", start: "2026-07-01", end: "2026-07-20" },
+  { id: 8, name: "QMD Strategy", type: "qmdse", start: "2026-08-01", end: "2026-08-25" },
+  { id: 9, name: "Culture Program", type: "iqc", start: "2026-09-01", end: "2026-09-30" }
+];
+
+function getDays(year) {
   const days = [];
-  const d = new Date(year, 0, 1);
+  let d = new Date(year, 0, 1);
   while (d.getFullYear() === year) {
-    const dow = d.getDay();
-    if (dow >= 1 && dow <= 5) days.push(new Date(d));
+    if (d.getDay() >= 1 && d.getDay() <= 5) {
+      days.push(new Date(d));
+    }
     d.setDate(d.getDate() + 1);
   }
   return days;
 }
 
-function dateToWorkdayIndex(date, days) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  for (let i = 0; i < days.length; i++) {
-    const dd = new Date(days[i]);
-    dd.setHours(0, 0, 0, 0);
-    if (dd >= d) return i;
-  }
-  return days.length - 1;
+function getIndex(date, days) {
+  const target = new Date(date).setHours(0,0,0,0);
+  return days.findIndex(d => d.setHours(0,0,0,0) >= target);
 }
-
-function getMonthGroups(days) {
-  const groups = [];
-  let lastMonth = -1, startIdx = 0;
-
-  days.forEach((d, i) => {
-    const m = d.getMonth();
-    if (m !== lastMonth) {
-      if (lastMonth !== -1) {
-        groups.push({ month: lastMonth, startIdx, count: i - startIdx });
-      }
-      lastMonth = m;
-      startIdx = i;
-    }
-  });
-
-  if (lastMonth !== -1) {
-    groups.push({ month: lastMonth, startIdx, count: days.length - startIdx });
-  }
-
-  return groups;
-}
-
-const defaultActivities = [
-  { id: 1, name: "Annual Review", type: "institutional", start: "2026-02-02", end: "2026-02-27", description: "Institutional annual performance review" },
-  { id: 2, name: "DQIP Cycle 1", type: "iqip", start: "2026-03-02", end: "2026-03-30", description: "Quality improvement cycle 1" },
-  { id: 3, name: "Staff Knowledge Session", type: "km", start: "2026-05-04", end: "2026-05-29", description: "Knowledge management session" },
-  { id: 4, name: "Faculty Workshop Q2", type: "fe", start: "2026-06-01", end: "2026-07-15", description: "Faculty engagement workshop" }
-];
 
 export default function App() {
-  const [year, setYear] = useState(new Date().getFullYear());
-  const [activities, setActivities] = useState(() => {
-    try {
-      const stored = localStorage.getItem("qmd_activities_v3");
-      return stored ? JSON.parse(stored) : defaultActivities;
-    } catch {
-      return defaultActivities;
-    }
-  });
+  const year = 2026;
+  const days = useMemo(() => getDays(year), [year]);
+  const totalW = days.length * DAY_W;
 
-  const [showModal, setShowModal] = useState(false);
-  const [formError, setFormError] = useState("");
-  
-  useEffect(() => {
-    localStorage.setItem("qmd_activities_v3", JSON.stringify(activities));
-  }, [activities]);
-
-  const days = getWorkdaysInYear(year);
-  const DAY_W = 28;
-
-  function openAdd() {
-    setFormError("");
-    setShowModal(true);
-  }
-
-  const css = `
-    body {
-      margin: 0;
-      background: #0d1117;
-      color: #e6edf3;
-      font-family: Arial, sans-serif;
-    }
-  `;
+  const [filter, setFilter] = useState("all");
+  const data = defaultData.filter(a => filter === "all" || a.type === filter);
 
   return (
-    <div>
-      <style>{css}</style>
+    <div style={{ background:"#0d1117", color:"#fff", minHeight:"100vh", fontFamily:"Segoe UI" }}>
 
-      <h1 style={{ padding: 20 }}>✅ QMD Schedule (Fixed)</h1>
+      {/* HEADER */}
+      <div style={{ padding:20 }}>
+        <h1>✅ QMD Advanced Gantt</h1>
 
-      <button onClick={openAdd} style={{ margin: 20 }}>
-        + Add Activity
-      </button>
-
-      <div style={{ padding: 20 }}>
-        Total activities: {activities.length}
+        {/* FILTERS */}
+        <div style={{ marginTop:10, display:"flex", flexWrap:"wrap", gap:6 }}>
+          <button onClick={() => setFilter("all")}>All</button>
+          {Object.keys(CATEGORIES).map(k => (
+            <button key={k} onClick={() => setFilter(k)}>
+              {CATEGORIES[k].label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {showModal && (
-        <div style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0,0,0,0.7)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center"
-        }}>
-          <div style={{
-            background: "#161b22",
-            padding: 20,
-            borderRadius: 10
-          }}>
-            <h2>Add Activity</h2>
+      <div style={{ display:"flex" }}>
 
-            {formError && <div style={{ color: "red" }}>{formError}</div>}
+        {/* LEFT PANEL */}
+        <div style={{ width:260 }}>
+          {data.map(a => (
+            <div key={a.id} style={{
+              height:ROW_H,
+              borderBottom:"1px solid #30363d",
+              padding:"8px"
+            }}>
+              <div style={{ fontWeight:600 }}>{a.name}</div>
+              <div style={{ fontSize:10, color:"#8b949e" }}>
+                {CATEGORIES[a.type].label}
+              </div>
+            </div>
+          ))}
+        </div>
 
-            <button onClick={() => setShowModal(false)}>
-              Close
-            </button>
+        {/* GANTT */}
+        <div style={{ overflowX:"auto", flex:1 }}>
+          <div style={{ width: totalW, position:"relative" }}>
+
+            {/* MONTH HEADER */}
+            {MONTHS.map((m,i) => (
+              <div key={i} style={{
+                position:"absolute",
+                left:i*20*DAY_W,
+                width:20*DAY_W,
+                top:0,
+                height:30,
+                fontSize:12,
+                color:"#8b949e",
+                borderRight:"1px solid #30363d"
+              }}>
+                {m}
+              </div>
+            ))}
+
+            {/* GRID */}
+            {days.map((d,i) => (
+              <div key={i} style={{
+                position:"absolute",
+                left:i*DAY_W,
+                top:30,
+                bottom:0,
+                width:1,
+                background:"#222"
+              }} />
+            ))}
+
+            {/* BARS */}
+            {data.map((a,row) => {
+              const start = getIndex(a.start, days);
+              const end = getIndex(a.end, days);
+
+              return (
+                <div key={a.id} style={{
+                  position:"absolute",
+                  top: row*ROW_H + 30,
+                  left: start * DAY_W,
+                  width: (end-start+1)*DAY_W,
+                  height: 24,
+                  background: CATEGORIES[a.type].color,
+                  borderRadius:6
+                }}
+                title={`${a.name} (${a.start} → ${a.end})`}
+                />
+              );
+            })}
           </div>
         </div>
-      )}
+
+      </div>
     </div>
   );
 }
+``
